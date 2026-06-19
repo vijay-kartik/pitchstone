@@ -34,6 +34,7 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   const [drag, setDrag] = useState({ x: 0, y: 0 })
   const [cancelling, setCancelling] = useState(false)
   const [locking, setLocking] = useState(false)
+  const [isTouch, setIsTouch] = useState(false)
 
   const phaseRef = useRef<Phase>('idle')
   const startPosRef = useRef({ x: 0, y: 0 })
@@ -133,23 +134,43 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   }, [createRecognition, onError, onRecordingComplete])
 
   // ── Pointer events ───────────────────────────────────────────
+  // Touch (mobile): hold to record, slide to cancel/lock
+  // Mouse (desktop): click to toggle on/off
+  const isTouchRef = useRef(false)
+
   const onPointerDown = async (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (uploading || phaseRef.current !== 'idle') return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    startPosRef.current = { x: e.clientX, y: e.clientY }
-    setDrag({ x: 0, y: 0 })
+    if (uploading) return
+
+    // Desktop click-to-toggle: stop if already recording
+    if (e.pointerType === 'mouse' && phaseRef.current !== 'idle') {
+      finishRecording(false)
+      return
+    }
+    if (phaseRef.current !== 'idle') return
+
+    isTouchRef.current = e.pointerType === 'touch'
+    setIsTouch(e.pointerType === 'touch')
+
+    if (isTouchRef.current) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      startPosRef.current = { x: e.clientX, y: e.clientY }
+      setDrag({ x: 0, y: 0 })
+    }
+
     const ok = await startRecording()
-    if (ok) { phaseRef.current = 'recording'; setPhase('recording') }
+    if (ok) {
+      phaseRef.current = 'recording'
+      setPhase('recording')
+    }
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (phaseRef.current !== 'recording') return
+    if (!isTouchRef.current || phaseRef.current !== 'recording') return
     const dx = e.clientX - startPosRef.current.x
     const dy = e.clientY - startPosRef.current.y
     setDrag({ x: dx, y: dy })
     setCancelling(dx < -60)
     setLocking(dy < -60 && dx > -40)
-    // Auto-lock when dragged up far enough
     if (dy < -100 && dx > -40) {
       phaseRef.current = 'locked'
       setPhase('locked')
@@ -157,13 +178,12 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
       setCancelling(false)
       setLocking(false)
     }
-    // Auto-cancel when dragged left far enough
     if (dx < -140) finishRecording(true)
   }
 
   const onPointerUp = () => {
-    if (phaseRef.current === 'recording') finishRecording(false)
-    // locked → user must press stop button explicitly
+    // Only auto-stop on touch release; mouse uses click-to-toggle
+    if (isTouchRef.current && phaseRef.current === 'recording') finishRecording(false)
   }
 
   const stopLocked = () => finishRecording(false)
@@ -208,35 +228,30 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
           transition: 'background 0.15s',
           borderBottom: '1px solid var(--border)',
         }}>
-          {phase === 'locked' ? (
-            /* ── Locked UI ── */
+          {phase === 'locked' || !isTouch ? (
+            /* ── Locked / Desktop UI — explicit stop button ── */
             <>
               <button onClick={cancelLocked} style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>Cancel</button>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <Bars />
                 <span style={{ color: '#f55', fontSize: 13, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(elapsed)}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔒 Locked</span>
+                {phase === 'locked' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔒 Locked</span>}
               </div>
               <button onClick={stopLocked} style={{ background: 'var(--danger)', border: 'none', color: '#fff', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>■</button>
             </>
           ) : (
-            /* ── Holding UI ── */
+            /* ── Touch hold UI — slide to cancel/lock ── */
             <>
-              {/* Slide-to-cancel affordance */}
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', opacity: cancelling ? 0.3 : 1, transition: 'opacity 0.1s' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', animation: 'va-arrow 1s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }}>◀</span>
                 <span style={{ fontSize: 12, color: cancelling ? 'var(--danger)' : 'var(--text-muted)', whiteSpace: 'nowrap', transition: 'color 0.15s' }}>
                   {cancelling ? 'Release to cancel' : 'Slide to cancel'}
                 </span>
               </div>
-
-              {/* Duration + waveform */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <Bars />
                 <span style={{ color: '#f55', fontSize: 13, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(elapsed)}</span>
               </div>
-
-              {/* Lock hint */}
               {locking && (
                 <div style={{ position: 'absolute', bottom: '100%', right: 14, marginBottom: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 10px', fontSize: 18, animation: 'va-lock-pop .15s ease' }}>
                   🔒

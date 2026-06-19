@@ -15,7 +15,6 @@ type Props = {
 export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }: Props) {
   const [title, setTitle] = useState(note.title)
   const [content, setContent] = useState(note.content)
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit')
   const [uploading, setUploading] = useState(false)
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [voiceError, setVoiceError] = useState<string | null>(null)
@@ -100,25 +99,6 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }
   const getUrl = (path: string) =>
     supabase.storage.from('recordings').getPublicUrl(path).data.publicUrl
 
-  const renderPreview = (text: string) => {
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\[\[([^\]]+)\]\]/g, (_, t) =>
-        `<span class="${allTitles.includes(t) ? 'wiki-link' : 'wiki-link-missing'}" data-title="${t}">[[${t}]]</span>`)
-      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/^### (.+)$/gm, '<h3 style="margin:12px 0 4px;font-size:15px">$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2 style="margin:14px 0 4px;font-size:17px">$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1 style="margin:16px 0 6px;font-size:20px">$1</h1>')
-      .replace(/\n/g, '<br>')
-  }
-
-  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const t = e.target as HTMLElement
-    if (t.dataset.title) onNavigate(t.dataset.title)
-  }
-
   const fmtDuration = (s: number | null) => {
     if (!s) return ''
     const m = Math.floor(s / 60), sec = Math.round(s % 60)
@@ -141,8 +121,6 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4caf50', display: 'inline-block' }} />Live
             </span>
           )}
-          <TabBtn active={mode === 'edit'} onClick={() => setMode('edit')}>Edit</TabBtn>
-          <TabBtn active={mode === 'preview'} onClick={() => setMode('preview')}>Preview</TabBtn>
           <VoiceInput
             uploading={uploading}
             onTranscript={handleTranscript}
@@ -177,32 +155,13 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }
       )}
 
       {/* Body */}
-      {mode === 'edit' ? (
-        <textarea
-          value={content}
-          onChange={e => handleContent(e.target.value)}
-          placeholder={'Start typing…\n\nTips:\n  [[Note title]] — link to another note\n  **bold**, *italic*\n  # Heading\n  https://... — clickable link'}
-          style={{ flex: 1, background: 'var(--bg)', border: 'none', color: 'var(--text)', fontSize: 14, lineHeight: 1.7, padding: 'clamp(12px, 4vw, 28px)', outline: 'none', resize: 'none', fontFamily: "'SF Mono', 'Fira Code', monospace" }}
-        />
-      ) : (
-        <div
-          onClick={handlePreviewClick}
-          dangerouslySetInnerHTML={{ __html: renderPreview(content) }}
-          style={{ flex: 1, overflow: 'auto', padding: 'clamp(12px, 4vw, 28px)', fontSize: 14, lineHeight: 1.8, color: 'var(--text)' }}
-        />
-      )}
+      <textarea
+        value={content}
+        onChange={e => handleContent(e.target.value)}
+        placeholder={'Start typing…\n\nTips:\n  [[Note title]] — link to another note\n  **bold**, *italic*\n  # Heading\n  https://... — clickable link'}
+        style={{ flex: 1, background: 'var(--bg)', border: 'none', color: 'var(--text)', fontSize: 14, lineHeight: 1.7, padding: 'clamp(12px, 4vw, 28px)', outline: 'none', resize: 'none', fontFamily: "'SF Mono', 'Fira Code', monospace" }}
+      />
     </div>
   )
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} style={{
-      background: active ? 'var(--accent)' : 'var(--surface2)',
-      border: '1px solid var(--border)',
-      color: active ? '#fff' : 'var(--text-muted)',
-      borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12,
-      fontWeight: active ? 600 : 400, transition: 'all 0.15s',
-    }}>{children}</button>
-  )
-}
