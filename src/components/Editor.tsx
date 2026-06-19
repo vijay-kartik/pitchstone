@@ -1,6 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
+import Link from '@tiptap/extension-link'
+import { marked } from 'marked'
 import { supabase, Note, Recording } from '@/lib/supabase'
 import VoiceInput from './VoiceInput'
 
@@ -11,23 +16,86 @@ type Props = {
   onNavigate: (title: string) => void
 }
 
+// Detect whether stored content is HTML or legacy markdown
+const isHTML = (s: string) => /^\s*</.test(s)
+
+// Parse stored content to HTML for Tiptap
+async function toHTML(content: string): Promise<string> {
+  if (!content) return ''
+  if (isHTML(content)) return content
+  // Legacy markdown → HTML
+  const html = await marked(content)
+  return html as string
+}
+
 export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props) {
   const [title, setTitle] = useState(note.title)
-  const [content, setContent] = useState(note.content)
   const [uploading, setUploading] = useState(false)
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [voiceError, setVoiceError] = useState<string | null>(null)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const contentRef = useRef(content)
   const titleRef = useRef(title)
+  const contentRef = useRef(note.content)
 
+  const scheduleSave = useCallback((newTitle: string, newContent: string) => {
+    titleRef.current = newTitle
+    contentRef.current = newContent
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      onUpdate(note.id, titleRef.current, contentRef.current)
+      if (titleRef.current === 'Untitled' && contentRef.current.replace(/<[^>]+>/g, '').trim().length >= 20) {
+        try {
+          const res = await fetch('/api/title', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: contentRef.current.replace(/<[^>]+>/g, '') }),
+          })
+          const { title: ai } = await res.json()
+          if (ai) {
+            titleRef.current = ai
+            setTitle(ai)
+            onUpdate(note.id, ai, contentRef.current)
+          }
+        } catch {}
+      }
+    }, 600)
+  }, [note.id, onUpdate])
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: 'Start typing…\n\nTip: use # for headings, **bold**, *italic*, [[Note title]] for links' }),
+      Link.configure({ openOnClick: false, autolink: true }),
+    ],
+    editorProps: {
+      attributes: {
+        style: [
+          'flex:1',
+          'outline:none',
+          'min-height:100%',
+          'padding:clamp(12px,4vw,28px)',
+          'font-size:15px',
+          'line-height:1.8',
+          'color:var(--text)',
+        ].join(';'),
+      },
+    },
+    onUpdate: ({ editor }) => {
+      scheduleSave(titleRef.current, editor.getHTML())
+    },
+  })
+
+  // Load note content into editor when note changes
   useEffect(() => {
     setTitle(note.title)
-    setContent(note.content)
-    contentRef.current = note.content
     titleRef.current = note.title
-  }, [note.id])
+    if (!editor) return
+    toHTML(note.content).then(html => {
+      editor.commands.setContent(html, { emitUpdate: false })
+      contentRef.current = editor.getHTML()
+    })
+  }, [note.id]) // eslint-disable-line
 
   useEffect(() => {
     supabase
@@ -36,38 +104,21 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
       .then(({ data }) => setRecordings(data ?? []))
   }, [note.id])
 
-  const scheduleSave = useCallback((newTitle: string, newContent: string) => {
-    titleRef.current = newTitle
-    contentRef.current = newContent
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      onUpdate(note.id, titleRef.current, contentRef.current)
-      if (titleRef.current === 'Untitled' && contentRef.current.trim().length >= 20) {
-        try {
-          const res = await fetch('/api/title', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: contentRef.current }),
-          })
-          const { title } = await res.json()
-          if (title) {
-            titleRef.current = title
-            setTitle(title)
-            onUpdate(note.id, title, contentRef.current)
-          }
-        } catch {}
-      }
-    }, 600)
-  }, [note.id, onUpdate])
-
-  const handleTitle = (v: string) => { setTitle(v); scheduleSave(v, contentRef.current) }
-  const handleContent = (v: string) => { setContent(v); scheduleSave(titleRef.current, v) }
+  // Wiki link click handler
+  const handleEditorClick = (e: React.MouseEvent) => {
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) return
+    const text = (e.target as HTMLElement).closest('p,li,h1,h2,h3,h4,blockquote')?.textContent ?? ''
+    const match = /\[\[([^\]]+)\]\]/.exec(text)
+    if (match) onNavigate(match[1])
+  }
 
   const handleTranscript = useCallback((text: string) => {
-    const next = contentRef.current + (contentRef.current ? ' ' : '') + text
-    setContent(next)
-    scheduleSave(titleRef.current, next)
-  }, [scheduleSave])
+    if (!editor) return
+    editor.commands.focus('end')
+    editor.commands.insertContent(' ' + text)
+    scheduleSave(titleRef.current, editor.getHTML())
+  }, [editor, scheduleSave])
 
   const handleRecordingComplete = useCallback(async (blob: Blob, durationSeconds: number) => {
     setUploading(true)
@@ -100,9 +151,10 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
 
   const fmtDuration = (s: number | null) => {
     if (!s) return ''
-    const m = Math.floor(s / 60), sec = Math.round(s % 60)
-    return `${m}:${sec.toString().padStart(2, '0')}`
+    return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
   }
+
+  const handleTitle = (v: string) => { setTitle(v); scheduleSave(v, contentRef.current) }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -114,14 +166,12 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
           placeholder="Untitled"
           style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 16, fontWeight: 600, outline: 'none' }}
         />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          <VoiceInput
-            uploading={uploading}
-            onTranscript={handleTranscript}
-            onRecordingComplete={handleRecordingComplete}
-            onError={setVoiceError}
-          />
-        </div>
+        <VoiceInput
+          uploading={uploading}
+          onTranscript={handleTranscript}
+          onRecordingComplete={handleRecordingComplete}
+          onError={setVoiceError}
+        />
       </div>
 
       {voiceError && (
@@ -139,7 +189,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
             <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <audio src={getUrl(rec.storage_path)} controls style={{ height: 28, flex: 1, minWidth: 0, accentColor: 'var(--accent)' }} />
               <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                {new Date(rec.created_at).toLocaleString()} {rec.duration_seconds ? `· ${fmtDuration(rec.duration_seconds)}` : ''}
+                {new Date(rec.created_at).toLocaleString()}{rec.duration_seconds ? ` · ${fmtDuration(rec.duration_seconds)}` : ''}
               </span>
               <button onClick={() => deleteRecording(rec)} title="Delete recording"
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 4px', flexShrink: 0 }}>✕</button>
@@ -148,14 +198,32 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
         </div>
       )}
 
-      {/* Body */}
-      <textarea
-        value={content}
-        onChange={e => handleContent(e.target.value)}
-        placeholder={'Start typing…\n\nTips:\n  [[Note title]] — link to another note\n  **bold**, *italic*\n  # Heading\n  https://... — clickable link'}
-        style={{ flex: 1, background: 'var(--bg)', border: 'none', color: 'var(--text)', fontSize: 14, lineHeight: 1.7, padding: 'clamp(12px, 4vw, 28px)', outline: 'none', resize: 'none', fontFamily: "'SF Mono', 'Fira Code', monospace" }}
-      />
+      {/* Tiptap editor body */}
+      <div
+        onClick={handleEditorClick}
+        style={{ flex: 1, overflow: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}
+      >
+        <EditorContent editor={editor} style={{ flex: 1, display: 'flex', flexDirection: 'column' }} />
+      </div>
+
+      <style>{`
+        .tiptap { flex: 1; }
+        .tiptap p { margin: 0 0 0.6em; }
+        .tiptap h1 { font-size: 1.8em; font-weight: 700; margin: 0.8em 0 0.4em; color: var(--text); }
+        .tiptap h2 { font-size: 1.4em; font-weight: 600; margin: 0.7em 0 0.3em; color: var(--text); }
+        .tiptap h3 { font-size: 1.15em; font-weight: 600; margin: 0.6em 0 0.3em; color: var(--text); }
+        .tiptap strong { color: var(--text); font-weight: 700; }
+        .tiptap em { color: var(--text); font-style: italic; opacity: 0.85; }
+        .tiptap a { color: var(--accent); text-decoration: underline; }
+        .tiptap ul, .tiptap ol { padding-left: 1.5em; margin: 0.4em 0; }
+        .tiptap li { margin: 0.2em 0; }
+        .tiptap blockquote { border-left: 3px solid var(--accent); margin: 0.6em 0; padding: 0.3em 0 0.3em 1em; color: var(--text-muted); }
+        .tiptap code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-family: 'SF Mono','Fira Code',monospace; font-size: 0.88em; }
+        .tiptap pre { background: var(--surface2); border-radius: 8px; padding: 12px 16px; overflow-x: auto; margin: 0.6em 0; }
+        .tiptap pre code { background: none; padding: 0; }
+        .tiptap hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+        .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; float: left; height: 0; white-space: pre-line; }
+      `}</style>
     </div>
   )
 }
-
