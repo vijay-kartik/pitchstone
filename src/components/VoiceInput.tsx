@@ -37,7 +37,6 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   const [isTouch, setIsTouch] = useState(false)
 
   const phaseRef = useRef<Phase>('idle')
-  const startPosRef = useRef({ x: 0, y: 0 })
   const cancelledRef = useRef(false)
   const listeningRef = useRef(false)
   const recognitionRef = useRef<SR | null>(null)
@@ -46,8 +45,16 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   const startTimeRef = useRef(0)
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
-  // keep phaseRef in sync
+  // Stable refs so native event listeners always call the latest version
+  const onTranscriptRef = useRef(onTranscript)
+  const onRecordingCompleteRef = useRef(onRecordingComplete)
+  const onErrorRef = useRef(onError)
+  useEffect(() => { onTranscriptRef.current = onTranscript }, [onTranscript])
+  useEffect(() => { onRecordingCompleteRef.current = onRecordingComplete }, [onRecordingComplete])
+  useEffect(() => { onErrorRef.current = onError }, [onError])
+
   useEffect(() => { phaseRef.current = phase }, [phase])
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }
@@ -62,28 +69,26 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
         .filter((r: SpeechRecognitionResult) => r.isFinal)
         .map((r: SpeechRecognitionResult) => r[0].transcript)
         .join(' ')
-      if (finals) onTranscript(finals.trim())
+      if (finals) onTranscriptRef.current(finals.trim())
     }
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        onError('Microphone access denied.')
-        finishRecording(true)
+        onErrorRef.current('Microphone access denied.')
+        doFinish(true)
       }
     }
     rec.onend = () => { if (listeningRef.current) createRecognition() }
     recognitionRef.current = rec
     rec.start()
-  }, [onTranscript, onError])
+  }, []) // eslint-disable-line
 
-  const finishRecording = useCallback((cancel: boolean) => {
+  const doFinish = useCallback((cancel: boolean) => {
     cancelledRef.current = cancel
     listeningRef.current = false
     stopTimer()
     recognitionRef.current?.stop()
     recognitionRef.current = null
-    if (mrRef.current && mrRef.current.state !== 'inactive') {
-      mrRef.current.stop()
-    }
+    if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop()
     mrRef.current = null
     phaseRef.current = 'idle'
     setPhase('idle')
@@ -91,106 +96,111 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
     setCancelling(false)
     setLocking(false)
     setElapsed(0)
+    setIsTouch(false)
   }, [])
 
-  const startRecording = useCallback(async () => {
+  const doStart = useCallback(async (): Promise<boolean> => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onError('Speech recognition not supported — use Safari or Chrome.'); return false }
-
+    if (!SR) { onErrorRef.current('Speech recognition not supported — use Safari or Chrome.'); return false }
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
     } catch {
-      onError('Microphone access denied. Allow it in browser settings.')
+      onErrorRef.current('Microphone access denied. Allow it in browser settings.')
       return false
     }
-
     chunksRef.current = []
     startTimeRef.current = Date.now()
     cancelledRef.current = false
-
     const mr = new MediaRecorder(stream)
     mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
     mr.onstop = () => {
       stream.getTracks().forEach(t => t.stop())
       if (!cancelledRef.current && chunksRef.current.length > 0) {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType })
-        const duration = (Date.now() - startTimeRef.current) / 1000
-        onRecordingComplete(blob, duration)
+        onRecordingCompleteRef.current(blob, (Date.now() - startTimeRef.current) / 1000)
       }
     }
     mr.start(1000)
     mrRef.current = mr
-
     listeningRef.current = true
     createRecognition()
-
     setElapsed(0)
     stopTimer()
-    timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
-
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
     return true
-  }, [createRecognition, onError, onRecordingComplete])
+  }, [createRecognition])
 
-  // ── Pointer events ───────────────────────────────────────────
-  // Touch (mobile): hold to record, slide to cancel/lock
-  // Mouse (desktop): click to toggle on/off
-  const isTouchRef = useRef(false)
-
-  const onPointerDown = async (e: React.PointerEvent<HTMLButtonElement>) => {
+  // ── Desktop: simple click-to-toggle via React onClick ────────
+  const handleClick = async () => {
     if (uploading) return
+    if (phaseRef.current !== 'idle') { doFinish(false); return }
+    // Only handle mouse clicks here; touch is handled below via native listeners
+    if (isTouch) return
+    const ok = await doStart()
+    if (ok) { phaseRef.current = 'recording'; setPhase('recording') }
+  }
 
-    // Desktop click-to-toggle: stop if already recording
-    if (e.pointerType === 'mouse' && phaseRef.current !== 'idle') {
-      finishRecording(false)
-      return
-    }
-    if (phaseRef.current !== 'idle') return
+  // ── Mobile: native touch listeners (passive:false to allow preventDefault) ──
+  useEffect(() => {
+    const btn = btnRef.current
+    if (!btn) return
 
-    isTouchRef.current = e.pointerType === 'touch'
-    setIsTouch(e.pointerType === 'touch')
+    let startX = 0, startY = 0
 
-    if (isTouchRef.current) {
-      e.currentTarget.setPointerCapture(e.pointerId)
-      startPosRef.current = { x: e.clientX, y: e.clientY }
+    const onTouchStart = async (e: TouchEvent) => {
+      if (uploading || phaseRef.current !== 'idle') return
+      e.preventDefault()
+      setIsTouch(true)
+      const t = e.touches[0]
+      startX = t.clientX
+      startY = t.clientY
       setDrag({ x: 0, y: 0 })
+      const ok = await doStart()
+      if (ok) { phaseRef.current = 'recording'; setPhase('recording') }
     }
 
-    const ok = await startRecording()
-    if (ok) {
-      phaseRef.current = 'recording'
-      setPhase('recording')
+    const onTouchMove = (e: TouchEvent) => {
+      if (phaseRef.current !== 'recording') return
+      e.preventDefault()
+      const t = e.touches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      setDrag({ x: dx, y: dy })
+      setCancelling(dx < -60)
+      setLocking(dy < -60 && dx > -40)
+      // Lock
+      if (dy < -100 && dx > -40) {
+        phaseRef.current = 'locked'
+        setPhase('locked')
+        setDrag({ x: 0, y: 0 })
+        setCancelling(false)
+        setLocking(false)
+      }
+      // Cancel
+      if (dx < -140) doFinish(true)
     }
-  }
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!isTouchRef.current || phaseRef.current !== 'recording') return
-    const dx = e.clientX - startPosRef.current.x
-    const dy = e.clientY - startPosRef.current.y
-    setDrag({ x: dx, y: dy })
-    setCancelling(dx < -60)
-    setLocking(dy < -60 && dx > -40)
-    if (dy < -100 && dx > -40) {
-      phaseRef.current = 'locked'
-      setPhase('locked')
-      setDrag({ x: 0, y: 0 })
-      setCancelling(false)
-      setLocking(false)
+    const onTouchEnd = (e: TouchEvent) => {
+      e.preventDefault()
+      if (phaseRef.current === 'recording') doFinish(false)
     }
-    if (dx < -140) finishRecording(true)
-  }
 
-  const onPointerUp = () => {
-    // Only auto-stop on touch release; mouse uses click-to-toggle
-    if (isTouchRef.current && phaseRef.current === 'recording') finishRecording(false)
-  }
+    btn.addEventListener('touchstart', onTouchStart, { passive: false })
+    btn.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    btn.addEventListener('touchend',   onTouchEnd,   { passive: false })
+    btn.addEventListener('touchcancel',onTouchEnd,   { passive: false })
+    return () => {
+      btn.removeEventListener('touchstart', onTouchStart)
+      btn.removeEventListener('touchmove',  onTouchMove)
+      btn.removeEventListener('touchend',   onTouchEnd)
+      btn.removeEventListener('touchcancel',onTouchEnd)
+    }
+  }, [doStart, doFinish, uploading])
 
-  const stopLocked = () => finishRecording(false)
-  const cancelLocked = () => finishRecording(true)
-
-  const btnX = phase === 'recording' ? Math.min(0, Math.max(-140, drag.x)) : 0
-  const btnY = phase === 'recording' ? Math.min(0, drag.y) : 0
+  const btnX = phase === 'recording' && isTouch ? Math.min(0, Math.max(-140, drag.x)) : 0
+  const btnY = phase === 'recording' && isTouch ? Math.min(0, drag.y) : 0
 
   return (
     <>
@@ -218,7 +228,7 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
         }
       `}</style>
 
-      {/* Recording overlay — replaces toolbar controls while active */}
+      {/* Recording overlay */}
       {phase !== 'idle' && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 50,
@@ -229,18 +239,18 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
           borderBottom: '1px solid var(--border)',
         }}>
           {phase === 'locked' || !isTouch ? (
-            /* ── Locked / Desktop UI — explicit stop button ── */
+            /* Desktop or locked: show explicit Cancel + ■ stop */
             <>
-              <button onClick={cancelLocked} style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>Cancel</button>
+              <button onClick={() => doFinish(true)} style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>Cancel</button>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <Bars />
                 <span style={{ color: '#f55', fontSize: 13, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(elapsed)}</span>
                 {phase === 'locked' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>🔒 Locked</span>}
               </div>
-              <button onClick={stopLocked} style={{ background: 'var(--danger)', border: 'none', color: '#fff', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>■</button>
+              <button onClick={() => doFinish(false)} style={{ background: 'var(--danger)', border: 'none', color: '#fff', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>■</button>
             </>
           ) : (
-            /* ── Touch hold UI — slide to cancel/lock ── */
+            /* Touch hold: slide affordance */
             <>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', opacity: cancelling ? 0.3 : 1, transition: 'opacity 0.1s' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', animation: 'va-arrow 1s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }}>◀</span>
@@ -262,32 +272,28 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
         </div>
       )}
 
-      {/* The mic button itself */}
+      {/* Mic button */}
       <div style={{ position: 'relative', flexShrink: 0, width: 36, height: 36 }}>
-        {/* Pulse rings — only when recording/locked */}
         {phase !== 'idle' && !cancelling && (
           <>
             <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--danger)', animation: 'va-pulse 1.2s ease-out infinite', pointerEvents: 'none' }} />
             <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--danger)', animation: 'va-pulse 1.2s ease-out .4s infinite', pointerEvents: 'none' }} />
           </>
         )}
-
         <button
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          ref={btnRef}
+          onClick={handleClick}
           disabled={uploading && phase === 'idle'}
           style={{
             position: 'absolute', inset: 0,
-            background: phase !== 'idle' ? 'var(--danger)' : uploading ? 'var(--surface2)' : 'var(--surface2)',
+            background: phase !== 'idle' ? 'var(--danger)' : 'var(--surface2)',
             border: phase !== 'idle' ? 'none' : '1px solid var(--border)',
             color: phase !== 'idle' ? '#fff' : 'var(--text)',
             borderRadius: '50%',
             cursor: uploading ? 'not-allowed' : 'pointer',
             fontSize: 17,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transform: `translate(${btnX}px, ${btnY}px) scale(${phase === 'recording' && !cancelling ? 1.2 : 1})`,
+            transform: `translate(${btnX}px, ${btnY}px) scale(${phase === 'recording' && isTouch && !cancelling ? 1.15 : 1})`,
             transition: phase === 'idle' ? 'transform 0.15s, background 0.15s' : 'background 0.15s',
             touchAction: 'none',
             userSelect: 'none',
