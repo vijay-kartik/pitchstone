@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__list_projects",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__restore_project",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__get_cost",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__confirm_cost",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__create_project",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__get_project_url",
+      "mcp__b03b48ee-227e-485d-a4ae-dcdb7e57f157__get_publishable_keys",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbopack --yes)"
+    ]
+  }
+}
