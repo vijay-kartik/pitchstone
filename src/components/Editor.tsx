@@ -9,10 +9,9 @@ type Props = {
   allTitles: string[]
   onUpdate: (id: string, title: string, content: string) => void
   onNavigate: (title: string) => void
-  isLive: boolean
 }
 
-export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }: Props) {
+export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props) {
   const [title, setTitle] = useState(note.title)
   const [content, setContent] = useState(note.content)
   const [uploading, setUploading] = useState(false)
@@ -116,11 +115,6 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate, isLive }
           style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 16, fontWeight: 600, outline: 'none' }}
         />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          {isLive && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4caf50', display: 'inline-block' }} />Live
-            </span>
-          )}
           <VoiceInput
             uploading={uploading}
             onTranscript={handleTranscript}

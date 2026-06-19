@@ -154,7 +154,6 @@ export default function Home() {
               allTitles={allTitles}
               onUpdate={updateNote}
               onNavigate={navigateToTitle}
-              isLive={isLive}
             />
           ) : (
             <EmptyState label="No notes yet" actionLabel="Create your first note" onCreate={createNote} />
