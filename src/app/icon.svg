@@ -1,0 +1,56 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="tile" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#2f2f2f"/>
+      <stop offset="1" stop-color="#1c1c1c"/>
+    </radialGradient>
+    <linearGradient id="left" x1="60" y1="20" x2="118" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7d7d88"/>
+      <stop offset="0.5" stop-color="#54545f"/>
+      <stop offset="1" stop-color="#3f3f49"/>
+    </linearGradient>
+    <linearGradient id="right" x1="152" y1="60" x2="118" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#43434d"/>
+      <stop offset="1" stop-color="#2c2c34"/>
+    </linearGradient>
+    <linearGradient id="top" x1="106" y1="20" x2="106" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9a9aa4"/>
+      <stop offset="1" stop-color="#7d7d88" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="seam" x1="82" y1="190" x2="146" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6d2fb8"/>
+      <stop offset="1" stop-color="#cba2ff"/>
+    </linearGradient>
+    <radialGradient id="node" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.25" stop-color="#edd6ff"/>
+      <stop offset="0.5" stop-color="#b24dff"/>
+      <stop offset="0.8" stop-color="#9b4dff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#9b4dff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="contact" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="url(#tile)"/>
+
+  <g transform="translate(76,63) scale(1.65)">
+    <ellipse cx="106" cy="212" rx="52" ry="12" fill="#000000" opacity="0.45" filter="url(#contact)"/>
+
+    <path d="M106 26 L152 80 L140 208 L112 207 Z" fill="url(#right)"/>
+    <path d="M106 26 L66 92 L78 198 L112 207 Z" fill="url(#left)"/>
+    <path d="M106 26 L66 92 L112 207 Z" fill="url(#top)" opacity="0.5"/>
+    <path d="M106 26 L66 92 L78 198" stroke="#9a9aa4" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity="0.55" fill="none"/>
+    <path d="M106 26 L112 207" stroke="#1d1d24" stroke-width="1.4" opacity="0.55"/>
+
+    <line x1="82" y1="190" x2="146" y2="96" stroke="#9b4dff" stroke-width="6" opacity="0.6" stroke-linecap="round" filter="url(#glow)"/>
+    <line x1="82" y1="190" x2="146" y2="96" stroke="url(#seam)" stroke-width="2.6" stroke-linecap="round"/>
+
+    <circle cx="146" cy="96" r="30" fill="url(#node)"/>
+    <circle cx="146" cy="96" r="4.4" fill="#f7eeff"/>
+  </g>
+</svg>
