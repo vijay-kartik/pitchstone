@@ -58,7 +58,7 @@ a { color: var(--accent); }
   .sidebar.open {
     transform: translateX(0);
   }
-  .sidebar-overlay {
+  .sidebar-overlay.open {
     display: block !important;
   }
   .mobile-header {

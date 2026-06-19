@@ -114,7 +114,7 @@ export default function Home() {
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden' }}>
       {/* Mobile sidebar overlay */}
-      <div className="sidebar-overlay" onClick={closeSidebar} />
+      <div className={`sidebar-overlay${sidebarOpen ? ' open' : ''}`} onClick={closeSidebar} />
 
       <Sidebar
         notes={notes}
