@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Notes',
-  description: 'Personal notes with real-time sync',
+  title: 'pitchstone',
+  description: 'Personal notes with voice input, wiki links, and real-time sync',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

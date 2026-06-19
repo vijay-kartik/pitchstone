@@ -32,6 +32,19 @@ export default function Sidebar({
 
   return (
     <aside className={`sidebar${sidebarOpen ? ' open' : ''}`} style={{ width: 240, minWidth: 200, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Brand wordmark */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 12px', flexShrink: 0 }}>
+        <svg width="16" height="22" viewBox="0 0 48 66" aria-hidden="true" style={{ flexShrink: 0 }}>
+          <polygon points="24,2 6,22 9,52 24,64" fill="#3A3550" />
+          <polygon points="24,2 42,22 39,52 24,64" fill="#24212E" />
+          <line x1="13" y1="48" x2="34" y2="14" stroke="#9585FF" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="34" cy="14" r="4" fill="#C9BFFF" />
+        </svg>
+        <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 }}>
+          pitch<span style={{ color: 'var(--accent-hover)' }}>stone</span>
+        </span>
+      </div>
+
       {/* Mode tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {(['notes', 'canvases'] as const).map(m => (
