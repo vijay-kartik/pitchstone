@@ -32,7 +32,7 @@ export default function Sidebar({
   )
 
   return (
-    <aside className={`sidebar${sidebarOpen ? ' open' : ''}`} style={{ width: 240, minWidth: 200, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <aside className={`sidebar${sidebarOpen ? ' open' : ''}`} style={{ width: 240, minWidth: 200, background: 'rgba(30, 30, 33, 0.72)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Brand wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 14px 12px', flexShrink: 0 }}>
         <Logo size={26} />

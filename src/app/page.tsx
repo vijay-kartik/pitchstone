@@ -112,7 +112,7 @@ export default function Home() {
   const allTitles = notes.map(n => n.title)
 
   return (
-    <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
       {/* Mobile sidebar overlay */}
       <div className={`sidebar-overlay${sidebarOpen ? ' open' : ''}`} onClick={closeSidebar} />
 

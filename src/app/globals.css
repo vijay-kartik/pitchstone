@@ -80,6 +80,8 @@ a { color: var(--accent); }
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(36, 36, 38, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   flex-shrink: 0;
 }
