@@ -8,6 +8,7 @@ import Link from '@tiptap/extension-link'
 import { marked } from 'marked'
 import { supabase, Note, Recording } from '@/lib/supabase'
 import VoiceInput from './VoiceInput'
+import Dictation from './Dictation'
 import AudioPlayer from './AudioPlayer'
 
 type Props = {
@@ -146,8 +147,10 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
 
   const handleTranscript = useCallback((text: string) => {
     if (!editor) return
-    editor.commands.focus('end')
-    editor.commands.insertContent(' ' + text)
+    // Append at the document end without stealing focus, so dictating on
+    // mobile doesn't pop the soft keyboard.
+    const end = editor.state.doc.content.size
+    editor.chain().insertContentAt(end, (end > 2 ? ' ' : '') + text).run()
     scheduleSave(titleRef.current, editor.getHTML())
   }, [editor, scheduleSave])
 
@@ -193,9 +196,9 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
           placeholder="Untitled"
           style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 16, fontWeight: 600, outline: 'none' }}
         />
+        <Dictation onText={handleTranscript} onError={setVoiceError} />
         <VoiceInput
           uploading={uploading}
-          onTranscript={handleTranscript}
           onRecordingComplete={handleRecordingComplete}
           onError={setVoiceError}
         />

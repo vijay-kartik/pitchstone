@@ -2,28 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-type SR = {
-  continuous: boolean; interimResults: boolean; lang: string
-  onresult: ((e: { results: SpeechRecognitionResultList; resultIndex: number }) => void) | null
-  onend: (() => void) | null
-  onerror: ((e: { error: string }) => void) | null
-  start: () => void; stop: () => void
-}
-declare global {
-  interface Window { SpeechRecognition: new () => SR; webkitSpeechRecognition: new () => SR }
-}
-
 type Phase = 'idle' | 'recording' | 'locked'
 type Props = {
   uploading: boolean
-  onTranscript: (text: string) => void
   onRecordingComplete: (blob: Blob, duration: number) => void
   onError: (msg: string | null) => void
 }
 
 function fmt(s: number) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
-export default function VoiceInput({ uploading, onTranscript, onRecordingComplete, onError }: Props) {
+export default function VoiceInput({ uploading, onRecordingComplete, onError }: Props) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [elapsed, setElapsed] = useState(0)
   const [drag, setDrag] = useState({ x: 0, y: 0 })
@@ -34,8 +22,6 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
 
   const phaseRef = useRef<Phase>('idle')
   const cancelledRef = useRef(false)
-  const listeningRef = useRef(false)
-  const recognitionRef = useRef<SR | null>(null)
   const mrRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const startTimeRef = useRef(0)
@@ -43,10 +29,8 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
 
-  const onTranscriptRef = useRef(onTranscript)
   const onRecordingCompleteRef = useRef(onRecordingComplete)
   const onErrorRef = useRef(onError)
-  useEffect(() => { onTranscriptRef.current = onTranscript }, [onTranscript])
   useEffect(() => { onRecordingCompleteRef.current = onRecordingComplete }, [onRecordingComplete])
   useEffect(() => { onErrorRef.current = onError }, [onError])
   useEffect(() => { phaseRef.current = phase }, [phase])
@@ -60,34 +44,9 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }
 
-  const createRecognition = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) return
-    const rec = new SR()
-    rec.continuous = false; rec.interimResults = true; rec.lang = 'en-US'
-    rec.onresult = (e) => {
-      const finals = Array.from(e.results)
-        .filter((r: SpeechRecognitionResult) => r.isFinal)
-        .map((r: SpeechRecognitionResult) => r[0].transcript).join(' ')
-      if (finals) onTranscriptRef.current(finals.trim())
-    }
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        onErrorRef.current('Microphone access denied.')
-        doFinish(true)
-      }
-    }
-    rec.onend = () => { if (listeningRef.current) createRecognition() }
-    recognitionRef.current = rec
-    rec.start()
-  }, []) // eslint-disable-line
-
   const doFinish = useCallback((cancel: boolean) => {
     cancelledRef.current = cancel
-    listeningRef.current = false
     stopTimer()
-    recognitionRef.current?.stop()
-    recognitionRef.current = null
     if (mrRef.current && mrRef.current.state !== 'inactive') mrRef.current.stop()
     mrRef.current = null
     phaseRef.current = 'idle'
@@ -100,8 +59,7 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
   }, [])
 
   const doStart = useCallback(async (): Promise<boolean> => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onErrorRef.current('Speech recognition not supported — use Safari or Chrome.'); return false }
+    if (!navigator.mediaDevices?.getUserMedia) { onErrorRef.current('Audio recording not supported in this browser.'); return false }
     let stream: MediaStream
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); streamRef.current = stream }
     catch { onErrorRef.current('Microphone access denied.'); return false }
@@ -118,12 +76,10 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
       }
     }
     mr.start(1000); mrRef.current = mr
-    listeningRef.current = true
-    createRecognition()
     setElapsed(0); stopTimer()
     timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
     return true
-  }, [createRecognition])
+  }, [])
 
   // Desktop: click to toggle
   const handleClick = async () => {
@@ -317,20 +273,21 @@ export default function VoiceInput({ uploading, onTranscript, onRecordingComplet
             boxShadow: isMobile && !active ? '0 4px 20px rgba(124,106,247,0.5)' : isMobile && active ? '0 4px 20px rgba(224,92,92,0.5)' : 'none',
           }}
         >
-          {uploading && !active ? <SpinnerIcon size={isMobile ? 24 : 18} /> : <MicIcon size={isMobile ? 26 : 17} />}
+          {uploading && !active ? <SpinnerIcon size={isMobile ? 24 : 18} /> : <WaveIcon size={isMobile ? 26 : 18} />}
         </button>
       </div>
     </>
   )
 }
 
-function MicIcon({ size = 20 }: { size?: number }) {
+function WaveIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="2" width="6" height="13" rx="3" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="8" y1="22" x2="16" y2="22" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <rect x="3" y="9.5" width="2.4" height="5" rx="1.2" />
+      <rect x="7.4" y="6.5" width="2.4" height="11" rx="1.2" />
+      <rect x="11.8" y="3" width="2.4" height="18" rx="1.2" />
+      <rect x="16.2" y="6.5" width="2.4" height="11" rx="1.2" />
+      <rect x="20.6" y="9.5" width="2.4" height="5" rx="1.2" />
     </svg>
   )
 }
