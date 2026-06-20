@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import AmbientBackground from '@/components/AmbientBackground'
+import Backdrop from '@/components/Backdrop'
 
 export const metadata: Metadata = {
   title: 'pitchstone',
@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AmbientBackground />
+        <Backdrop />
         {children}
       </body>
     </html>
