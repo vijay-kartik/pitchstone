@@ -5,6 +5,7 @@ import { supabase, Note, Canvas } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import Editor from '@/components/Editor'
 import CanvasEditor from '@/components/CanvasEditor'
+import Logo from '@/components/Logo'
 
 export default function Home() {
   const [notes, setNotes] = useState<Note[]>([])
@@ -216,10 +217,18 @@ export default function Home() {
 
 function EmptyState({ label, actionLabel, onCreate }: { label: string; actionLabel: string; onCreate: () => void }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: 16 }}>
-      <div style={{ fontSize: 48 }}>📝</div>
-      <div style={{ fontSize: 16, fontWeight: 500 }}>{label}</div>
-      <button onClick={onCreate} style={{ background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: 18, padding: 24 }}>
+      <div style={{ opacity: 0.85, filter: 'drop-shadow(0 8px 24px rgba(124,106,247,0.25))' }}>
+        <Logo size={64} />
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text)' }}>{label}</div>
+      <button
+        onClick={onCreate}
+        style={{ background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 10, padding: '9px 22px', cursor: 'pointer', fontSize: 14, fontWeight: 600, boxShadow: '0 2px 12px rgba(124,106,247,0.4)', transition: 'transform 0.15s cubic-bezier(0.32,0.72,0,1)' }}
+        onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.96)')}
+        onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+      >
         {actionLabel}
       </button>
     </div>

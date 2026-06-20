@@ -13,7 +13,7 @@ export default function Backdrop() {
         background:
           'radial-gradient(1000px 720px at 80% -14%, rgba(124,106,247,0.10), transparent 60%),' +
           'radial-gradient(760px 560px at 6% 114%, rgba(124,106,247,0.05), transparent 55%),' +
-          '#1a1a1a',
+          '#1c1c1e',
       }}
     />
   )

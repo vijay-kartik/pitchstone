@@ -185,7 +185,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Toolbar */}
-      <div style={{ position: 'relative', padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(36, 36, 38, 0.82)', flexWrap: 'wrap', flexShrink: 0 }}>
+      <div style={{ position: 'relative', padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(30, 30, 32, 0.8)', flexWrap: 'wrap', flexShrink: 0 }}>
         <input
           ref={titleInputRef}
           value={title}
@@ -210,7 +210,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
 
       {/* Recordings panel */}
       {recordings.length > 0 && (
-        <div style={{ borderBottom: '1px solid var(--border)', background: 'rgba(36, 36, 38, 0.6)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', padding: '8px 20px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <div style={{ borderBottom: '1px solid var(--border)', background: 'rgba(30, 30, 32, 0.6)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', padding: '10px 20px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Recordings</div>
           {recordings.map(rec => (
             <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
