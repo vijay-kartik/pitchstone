@@ -37,6 +37,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleRef = useRef(title)
   const contentRef = useRef(note.content)
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   const scheduleSave = useCallback((newTitle: string, newContent: string) => {
     titleRef.current = newTitle
@@ -86,7 +87,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
     },
   })
 
-  // Load note content into editor when note changes
+  // Full reset when switching to a different note
   useEffect(() => {
     setTitle(note.title)
     titleRef.current = note.title
@@ -96,6 +97,28 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
       contentRef.current = editor.getHTML()
     })
   }, [note.id]) // eslint-disable-line
+
+  // Live external updates to the SAME note (e.g. edited on another device).
+  // Only applied when the user isn't actively typing here, so the cursor is never clobbered.
+  useEffect(() => {
+    if (!editor || editor.isFocused) return
+    let cancelled = false
+    toHTML(note.content).then(html => {
+      if (cancelled) return
+      if (html !== editor.getHTML()) {
+        editor.commands.setContent(html, { emitUpdate: false })
+        contentRef.current = editor.getHTML()
+      }
+    })
+    return () => { cancelled = true }
+  }, [note.content, editor])
+
+  // External title updates when the title field isn't being edited here
+  useEffect(() => {
+    if (document.activeElement === titleInputRef.current) return
+    setTitle(note.title)
+    titleRef.current = note.title
+  }, [note.title])
 
   useEffect(() => {
     supabase
@@ -161,6 +184,7 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
       {/* Toolbar */}
       <div style={{ position: 'relative', padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(36, 36, 38, 0.82)', flexWrap: 'wrap', flexShrink: 0 }}>
         <input
+          ref={titleInputRef}
           value={title}
           onChange={e => handleTitle(e.target.value)}
           placeholder="Untitled"

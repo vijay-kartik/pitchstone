@@ -49,6 +49,26 @@ export default function Home() {
     return () => { channel.unsubscribe() }
   }, [])
 
+  // Safety net: refetch when a backgrounded tab regains focus, in case a
+  // realtime update was missed (dropped websocket, restored/bfcached tab).
+  useEffect(() => {
+    const refetch = () => {
+      if (document.hidden) return
+      supabase.from('notes').select('*').order('updated_at', { ascending: false }).then(({ data }) => {
+        if (data) setNotes(data)
+      })
+      supabase.from('canvases').select('*').order('updated_at', { ascending: false }).then(({ data }) => {
+        if (data) setCanvases(data as Canvas[])
+      })
+    }
+    window.addEventListener('focus', refetch)
+    document.addEventListener('visibilitychange', refetch)
+    return () => {
+      window.removeEventListener('focus', refetch)
+      document.removeEventListener('visibilitychange', refetch)
+    }
+  }, [])
+
   const closeSidebar = () => setSidebarOpen(false)
 
   const createNote = async () => {
