@@ -8,6 +8,7 @@ import Link from '@tiptap/extension-link'
 import { marked } from 'marked'
 import { supabase, Note, Recording } from '@/lib/supabase'
 import VoiceInput from './VoiceInput'
+import AudioPlayer from './AudioPlayer'
 
 type Props = {
   note: Note
@@ -179,11 +180,6 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
   const getUrl = (path: string) =>
     supabase.storage.from('recordings').getPublicUrl(path).data.publicUrl
 
-  const fmtDuration = (s: number | null) => {
-    if (!s) return ''
-    return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
-  }
-
   const handleTitle = (v: string) => { setTitle(v); scheduleSave(v, contentRef.current) }
 
   return (
@@ -218,9 +214,9 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Recordings</div>
           {recordings.map(rec => (
             <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <audio src={getUrl(rec.storage_path)} controls style={{ height: 28, flex: 1, minWidth: 0, accentColor: 'var(--accent)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                {new Date(rec.created_at).toLocaleString()}{rec.duration_seconds ? ` · ${fmtDuration(rec.duration_seconds)}` : ''}
+              <AudioPlayer src={getUrl(rec.storage_path)} durationHint={rec.duration_seconds} seed={rec.id} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {new Date(rec.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
               </span>
               <button onClick={() => deleteRecording(rec)} title="Delete recording"
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 4px', flexShrink: 0 }}>✕</button>
