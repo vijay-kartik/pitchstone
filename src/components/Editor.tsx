@@ -71,6 +71,13 @@ export default function Editor({ note, allTitles, onUpdate, onNavigate }: Props)
     ],
     editorProps: {
       attributes: {
+        // Mobile keyboards (Gboard predictive text / iOS autocorrect) deliver
+        // characters via composition events and auto-replace text, which bypasses
+        // ProseMirror's markdown input rules. Turning these off lets the rules fire.
+        autocapitalize: 'off',
+        autocorrect: 'off',
+        autocomplete: 'off',
+        spellcheck: 'false',
         style: [
           'flex:1',
           'outline:none',
