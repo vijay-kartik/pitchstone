@@ -68,11 +68,24 @@ export default function Dictation({ onText, onError }: Props) {
       if (finals) onTextRef.current(finals)
     }
     rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        onErrorRef.current('Microphone access denied. Allow it in browser settings.')
-        stop()
+      // 'no-speech' / 'aborted' are transient — let onend restart quietly.
+      if (e.error === 'no-speech' || e.error === 'aborted') return
+      console.warn('[dictation] error:', e.error, 'lang:', langRef.current)
+      const langLabel = LANGS.find(l => l.code === langRef.current)?.label ?? 'This language'
+      let msg: string
+      switch (e.error) {
+        case 'not-allowed':
+        case 'service-not-allowed':
+          msg = 'Microphone access denied. Allow it in browser settings.'; break
+        case 'language-not-supported':
+          msg = `${langLabel} dictation isn’t supported in this browser — try Google Chrome.`; break
+        case 'network':
+          msg = 'Speech service unreachable. Check your connection.'; break
+        default:
+          msg = `Dictation error (${e.error}).`
       }
-      // 'no-speech' / 'aborted' are transient — onend restarts while active
+      onErrorRef.current(msg)
+      stop()
     }
     rec.onend = () => { if (activeRef.current) create() }
     recRef.current = rec
