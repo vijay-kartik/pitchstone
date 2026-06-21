@@ -18,13 +18,21 @@ type Props = {
   onError: (msg: string | null) => void
 }
 
+// Languages offered for dictation. The Web Speech API transcribes in the
+// chosen language's script (e.g. hi-IN produces Devanagari).
+const LANGS = [
+  { code: 'en-US', label: 'English' },
+  { code: 'hi-IN', label: 'हिन्दी' },
+]
+
 // Live speech-to-text. Runs SpeechRecognition only (no MediaRecorder), so it
-// doesn't contend with the audio recorder for the microphone. Finalized
-// phrases are inserted into the note as they're recognized.
+// doesn't contend with the audio recorder for the microphone.
 export default function Dictation({ onText, onError }: Props) {
   const [active, setActive] = useState(false)
   const [supported, setSupported] = useState(true)
+  const [lang, setLang] = useState('en-US')
   const activeRef = useRef(false)
+  const langRef = useRef('en-US')
   const recRef = useRef<SR | null>(null)
 
   const onTextRef = useRef(onText)
@@ -33,6 +41,8 @@ export default function Dictation({ onText, onError }: Props) {
   useEffect(() => { onErrorRef.current = onError }, [onError])
   useEffect(() => {
     setSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition))
+    const saved = localStorage.getItem('dictation-lang')
+    if (saved && LANGS.some(l => l.code === saved)) { setLang(saved); langRef.current = saved }
   }, [])
 
   const stop = useCallback(() => {
@@ -48,7 +58,7 @@ export default function Dictation({ onText, onError }: Props) {
     const rec: SR = new Ctor()
     rec.continuous = false
     rec.interimResults = true
-    rec.lang = 'en-US'
+    rec.lang = langRef.current
     rec.onresult = (e) => {
       const finals = Array.from(e.results)
         .filter((r: SpeechRecognitionResult) => r.isFinal)
@@ -78,6 +88,14 @@ export default function Dictation({ onText, onError }: Props) {
     create()
   }
 
+  const changeLang = (code: string) => {
+    setLang(code)
+    langRef.current = code
+    try { localStorage.setItem('dictation-lang', code) } catch {}
+    // Restart in the new language if currently dictating (onend re-creates).
+    if (activeRef.current) { try { recRef.current?.stop() } catch {} }
+  }
+
   useEffect(() => () => { activeRef.current = false; try { recRef.current?.stop() } catch {} }, [])
 
   return (
@@ -90,6 +108,23 @@ export default function Dictation({ onText, onError }: Props) {
           Listening…
         </span>
       )}
+
+      <select
+        value={lang}
+        onChange={e => changeLang(e.target.value)}
+        disabled={!supported}
+        title="Dictation language"
+        aria-label="Dictation language"
+        style={{
+          height: 34, borderRadius: 9, border: '1px solid var(--border)',
+          background: 'var(--surface2)', color: 'var(--text)',
+          fontSize: 12.5, fontFamily: 'inherit', padding: '0 6px',
+          cursor: supported ? 'pointer' : 'not-allowed', outline: 'none', flexShrink: 0,
+          opacity: supported ? 1 : 0.5,
+        }}
+      >
+        {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+      </select>
 
       <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
         {active && (
